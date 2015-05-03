@@ -10,7 +10,7 @@ else :
     print "Original Date = %s" % tags["EXIF DateTimeOriginal"]
 
 
-#for tag in tags.keys():
-#    if tag not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename',
-#                   'EXIF MakerNote'):
-#        print "%s = %s" % (tag, tags[tag])
+for tag in tags.keys():
+    if tag not in ('JPEGThumbnail', 'TIFFThumbnail', 'Filename',
+                   'EXIF MakerNote'):
+        print "%s = %s" % (tag, tags[tag])

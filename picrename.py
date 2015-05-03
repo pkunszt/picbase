@@ -12,7 +12,7 @@ exif_format = "%Y:%m:%d %H:%M:%S"	# exif format is with colons
 out_format = "%Y-%m-%d %H-%M-%S"	# output format with dashes
 ext_out = ".jpg" 			# always rename to .jpg
 
-base_target = "/media/photos/02_DIGITAL-CAM/%Y/%m_%B/"
+base_target = "/media/photos/01_DIGITAL-CAM/%Y/%m_%B/"
 
 ATOM_HEADER_SIZE = 8
 EPOCH_ADJUSTER = 2082844800   # difference between Unix epoch and QuickTime epoch, in seconds
@@ -20,13 +20,16 @@ EPOCH_ADJUSTER = 2082844800   # difference between Unix epoch and QuickTime epoc
 # cache directory names so that we do not have to stat the same dir all the time
 dirs_cache = []
 # duplicate name pattern
-pat = re.compile("\((\d+)\)$")  
+pat = re.compile("\((\d+)\)$")
+patdir = "%Y%m%d-%H%M%S"
 
 def walktree(top):
     '''recursively descend the directory tree rooted at top,
        calling the callback function for each regular file'''
 
     for f in os.listdir(top):
+        if f.startswith('.') :  # ignore hidden files and directories
+            continue
         pathname = os.path.join(top, f)
         mode = os.stat(pathname).st_mode
         if S_ISDIR(mode):
@@ -37,10 +40,10 @@ def walktree(top):
             ext = os.path.splitext(f)[1].lower()
             if ext in ['.jpeg','.jpg','.nef','.png','.gif','.tif','.tiff'] :   # now we only support these 3
                 renamepic(pathname)
-            if ext in ['.mov','.mp4'] : # video
+            elif ext in ['.mov','.mp4'] : # video
                 renamemov(pathname)
-#            else :
-#                print "skipping %s - %s", [pathname, os.path.splitext(f)[1].lower()]
+            else :
+                print "skipping %s - %s", [pathname, os.path.splitext(f)[1].lower()]
         else:
             # Unknown file type, print a message
             print 'Skipping %s' % pathname
@@ -105,9 +108,17 @@ def renamepic(file):
         elif ext.lower() in ['.jpg','.jpeg'] :
             safemove(file, dt.strftime(base_target) + dt.strftime(out_format) + ext_out)
 
-#    else :
-#        print "No original date found - skip %s" % file
-
+    else :
+        print "No original date found in %s" % file
+        # lets see if the last directory has a useful convention for datetime
+        s1, s2 = os.path.split(file)
+        s3, d = os.path.split(s1)
+        try:
+            dt = datetime.strptime(d,patdir)   # read in date format if possible
+            safemove(file, dt.strftime(base_target) + dt.strftime(out_format) + ext_out)
+        except ValueError :
+            # did not manage to do it
+            print "failed with %s" % file
 
 def renamemov(file):
 
@@ -115,6 +126,8 @@ def renamemov(file):
     f = open(file, "rb")
     while 1:
         atom_header = f.read(ATOM_HEADER_SIZE)
+        if len(atom_header) < 4:
+            return
         if atom_header[4:8] == 'moov':
             break
         else:
@@ -135,7 +148,7 @@ def renamemov(file):
     dat = datetime.utcfromtimestamp(creation_date - EPOCH_ADJUSTER)
     mod = datetime.utcfromtimestamp(modification_date - EPOCH_ADJUSTER)
 
-    safemove(source, dat.strftime(base_target) +"filmchen/" + dat.strftime(out_format) + ".mov")     
+    safemove(file, dat.strftime(base_target) +"filmchen/" + dat.strftime(out_format) + ".mov")     
 
 if __name__ == '__main__':
     walktree(sys.argv[1])
