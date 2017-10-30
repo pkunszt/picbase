@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import os, sys, shutil, re
+import os, sys, shutil, re, time
 import struct
 from datetime import datetime
 from stat import *
@@ -27,6 +27,7 @@ def walktree(top):
     '''recursively descend the directory tree rooted at top,
        calling the callback function for each regular file'''
 
+    print "    - inside %s" % top
     for f in os.listdir(top):
         if f.startswith('.') :  # ignore hidden files and directories
             continue
@@ -39,14 +40,16 @@ def walktree(top):
             # Lowercase extension
             ext = os.path.splitext(f)[1].lower()
             if ext in ['.jpeg','.jpg','.nef','.png','.gif','.tif','.tiff'] :   # now we only support these 3
+#                print "rename pic %s" % pathname
                 renamepic(pathname)
-            elif ext in ['.mov','.mp4'] : # video
+            elif ext in ['.mov','.mp4','.m4v'] : # video
+#                print "rename mov %s" % pathname
                 renamemov(pathname)
             else :
-                print "skipping %s - %s", [pathname, os.path.splitext(f)[1].lower()]
+                print "Unknown type %s skipping %s - %s" % (ext, pathname, os.path.splitext(f)[1].lower())
         else:
             # Unknown file type, print a message
-            print 'Skipping %s' % pathname
+            print 'Unknown mode %s Skipping %s' % (mode,pathname)
 
 
 # Move file safely from source to dest
@@ -79,17 +82,26 @@ def safemove(source, dest) :
 
     print "%s move to %s" % (source, dest)
     shutil.move(source, dest)
-
+    print "Moved"
 
 def renamepic(file):
-#    print 'visiting', file
+    print ' '
+    print 'RENAME %s' % file
 
     f = open(file, 'rb')
-    tags = EXIF.process_file(f)
+    tags = EXIF.process_file(f) #,'UNDEF',True,False,True)
+    print "    - EXIF.done "
 
     if exif_dt in tags :     # just look for the datetime original tag
 
-        dt = datetime.strptime(str(tags[exif_dt]),exif_format)   # read in date format
+        print "EXIF Original %s" % tags[exif_dt]
+        try:
+            dt = datetime.strptime(str(tags[exif_dt]),exif_format)   # read in date format
+        except:
+            print "Bad Date %s" % tags[exif_dt]
+            try_alternative_name(file)
+            return
+
         base, ext = os.path.splitext(file)
 
         # if NEF format, convert file first
@@ -109,16 +121,24 @@ def renamepic(file):
             safemove(file, dt.strftime(base_target) + dt.strftime(out_format) + ext_out)
 
     else :
-        print "No original date found in %s" % file
+        print "    FAIL No original date found in %s" % file
+        try_alternative_name(file)
+
+def try_alternative_name(file):
+
         # lets see if the last directory has a useful convention for datetime
         s1, s2 = os.path.split(file)
         s3, d = os.path.split(s1)
         try:
             dt = datetime.strptime(d,patdir)   # read in date format if possible
-            safemove(file, dt.strftime(base_target) + dt.strftime(out_format) + ext_out)
+            #safemove(file, dt.strftime(base_target) + dt.strftime(out_format) + ext_out)
+            print "    x TRY would create %s" % dt.strftime(base_target) + dt.strftime(out_format) + ext_out
         except ValueError :
             # did not manage to do it
-            print "failed with %s" % file
+            print "    FAIL failed with %s" % file
+#        print "last modified: %s" % time.ctime(os.path.getmtime(file))
+#        print "created: %s" % time.ctime(os.path.getctime(file))
+
 
 def renamemov(file):
 
@@ -137,9 +157,9 @@ def renamemov(file):
     # found 'moov', look for 'mvhd' and timestamps
     atom_header = f.read(ATOM_HEADER_SIZE)
     if atom_header[4:8] == 'cmov':
-        print "moov atom is compressed"
+        print "    - moov atom is compressed"
     elif atom_header[4:8] != 'mvhd':
-        print "expected to find 'mvhd' header"
+        print "    - expected to find 'mvhd' header"
     else:
         f.seek(4, 1)
         creation_date = struct.unpack(">I", f.read(4))[0]
